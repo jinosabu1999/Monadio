@@ -1,172 +1,50 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import {
-  Activity,
-  AlarmClock,
-  ArrowRight,
-  Check,
-  ChevronRight,
-  CircleStop,
-  FileText,
-  Gauge,
-  HeartPulse,
-  Menu,
-  Pause,
-  Play,
-  Plus,
-  RotateCcw,
-  Settings2,
-  Sparkles,
-  TimerReset,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Activity, AlarmClock, BarChart3, Check, CircleStop, FileText, HeartPulse, Menu, Pause, Play, Plus, RotateCcw, Search, Settings2, Sparkles, Trash2, X } from 'lucide-react'
 
 type ToolId = 'overview' | 'bmi' | 'focus' | 'stopwatch' | 'notes'
-
-type Note = { id: number; title: string; body: string; updated: string }
-
-const toolMeta: Record<ToolId, { label: string; icon: typeof Gauge }> = {
-  overview: { label: 'Overview', icon: Sparkles },
-  bmi: { label: 'BMI check', icon: HeartPulse },
-  focus: { label: 'Focus timer', icon: AlarmClock },
-  stopwatch: { label: 'Stopwatch', icon: CircleStop },
-  notes: { label: 'Notes', icon: FileText },
-}
-
-const starterNotes: Note[] = [
-  { id: 1, title: 'A gentle start', body: 'Choose one small thing. Make it easy to begin, then let momentum do the rest.', updated: 'Today' },
-  { id: 2, title: 'Ideas to revisit', body: 'A quiet list for thoughts that do not need your attention right now.', updated: 'Yesterday' },
+type Note = { id: number; title: string; body: string; updated: string; pinned?: boolean }
+const tools: { id: ToolId; label: string; icon: typeof Activity }[] = [
+  { id: 'overview', label: 'Overview', icon: Sparkles }, { id: 'bmi', label: 'BMI', icon: HeartPulse }, { id: 'focus', label: 'Focus', icon: AlarmClock }, { id: 'stopwatch', label: 'Stopwatch', icon: CircleStop }, { id: 'notes', label: 'Notes', icon: FileText },
 ]
+const starter: Note[] = [{ id: 1, title: 'A gentle start', body: 'Choose one small thing. Make it easy to begin, then let momentum do the rest.', updated: 'Today', pinned: true }, { id: 2, title: 'Ideas to revisit', body: 'A quiet list for thoughts that do not need your attention right now.', updated: 'Yesterday' }]
+const pad = (n: number) => String(n).padStart(2, '0')
+const clock = (ms: number, centis = false) => `${pad(Math.floor(ms / 60000))}:${pad(Math.floor(ms / 1000) % 60)}${centis ? `.${pad(Math.floor(ms / 10) % 100)}` : ''}`
 
-function formatTime(value: number) {
-  const minutes = Math.floor(value / 60).toString().padStart(2, '0')
-  const seconds = (value % 60).toString().padStart(2, '0')
-  return `${minutes}:${seconds}`
-}
-
-function Logo() {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
-        <div className="grid size-5 grid-cols-2 gap-0.5">
-          <span className="rounded-tl-md bg-primary-foreground/90" />
-          <span className="rounded-tr-md bg-primary-foreground/60" />
-          <span className="rounded-bl-md bg-primary-foreground/60" />
-          <span className="rounded-br-md bg-primary-foreground/90" />
-        </div>
-      </div>
-      <div>
-        <p className="font-serif text-xl leading-none tracking-tight">Fair</p>
-        <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">Small tools, well made</p>
-      </div>
-    </div>
-  )
-}
-
-function ToolCard({ id, title, description, icon: Icon, onOpen, children }: { id: ToolId; title: string; description: string; icon: typeof Gauge; onOpen: (id: ToolId) => void; children: React.ReactNode }) {
-  return (
-    <section className="rounded-[1.75rem] border border-border/70 bg-card p-5 shadow-[0_14px_40px_-28px_hsl(var(--foreground)/.32)] sm:p-6">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary"><Icon className="size-5" /></div>
-          <div><h2 className="font-serif text-xl tracking-tight">{title}</h2><p className="mt-1 max-w-xs text-sm leading-5 text-muted-foreground">{description}</p></div>
-        </div>
-        <button aria-label={`Open ${title}`} onClick={() => onOpen(id)} className="rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"><ArrowRight className="size-4" /></button>
-      </div>
-      {children}
-    </section>
-  )
-}
+function Logo() { return <div className="flex min-w-0 items-center gap-2.5"><div className="grid size-9 shrink-0 grid-cols-2 gap-0.5 rounded-xl bg-primary p-2"><span className="rounded-tl-sm bg-primary-foreground" /><span className="rounded-tr-sm bg-primary-foreground/60" /><span className="rounded-bl-sm bg-primary-foreground/60" /><span className="rounded-br-sm bg-primary-foreground" /></div><div className="min-w-0"><p className="truncate text-base font-semibold tracking-tight">Fair</p><p className="hidden truncate text-[10px] uppercase tracking-[.18em] text-muted-foreground sm:block">Small tools, well made</p></div></div> }
+function IconButton({ label, onClick, children }: { label: string; onClick?: () => void; children: React.ReactNode }) { return <button type="button" aria-label={label} onClick={onClick} className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{children}</button> }
+function Card({ title, description, icon: Icon, children, open }: { title: string; description: string; icon: typeof Activity; children: React.ReactNode; open: () => void }) { return <section className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"><div className="mb-5 flex items-start justify-between gap-3"><div className="flex min-w-0 gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary"><Icon className="size-4" /></div><div className="min-w-0"><h2 className="truncate font-semibold">{title}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p></div></div><IconButton label={`Open ${title}`} onClick={open}><span aria-hidden>→</span></IconButton></div>{children}</section> }
 
 export default function Page() {
-  const [activeTool, setActiveTool] = useState<ToolId>('overview')
-  const [mobileMenu, setMobileMenu] = useState(false)
-  const [height, setHeight] = useState('170')
-  const [weight, setWeight] = useState('68')
-  const [bmi, setBmi] = useState<number | null>(null)
-  const [focusSeconds, setFocusSeconds] = useState(25 * 60)
-  const [focusRunning, setFocusRunning] = useState(false)
-  const [stopwatch, setStopwatch] = useState(0)
-  const [stopwatchRunning, setStopwatchRunning] = useState(false)
-  const [notes, setNotes] = useState<Note[]>(starterNotes)
-  const [selectedNote, setSelectedNote] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (!focusRunning) return
-    const timer = window.setInterval(() => setFocusSeconds((current) => current > 0 ? current - 1 : 25 * 60), 1000)
-    return () => window.clearInterval(timer)
-  }, [focusRunning])
-
-  useEffect(() => {
-    if (!stopwatchRunning) return
-    const timer = window.setInterval(() => setStopwatch((current) => current + 1), 1000)
-    return () => window.clearInterval(timer)
-  }, [stopwatchRunning])
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem('fair-notes')
-    if (saved) setNotes(JSON.parse(saved))
-  }, [])
-
-  useEffect(() => { window.localStorage.setItem('fair-notes', JSON.stringify(notes)) }, [notes])
-
-  const bmiLabel = useMemo(() => bmi === null ? 'Ready when you are' : bmi < 18.5 ? 'Below the usual range' : bmi < 25 ? 'Within the usual range' : bmi < 30 ? 'Above the usual range' : 'Higher than the usual range', [bmi])
-  const selected = notes.find((note) => note.id === selectedNote)
-
-  function calculateBmi() {
-    const meters = Number(height) / 100
-    const value = Number(weight) / (meters * meters)
-    setBmi(Number.isFinite(value) ? Number(value.toFixed(1)) : null)
-  }
-
-  function addNote() {
-    const note = { id: Date.now(), title: 'Untitled note', body: '', updated: 'Just now' }
-    setNotes((current) => [note, ...current])
-    setSelectedNote(note.id)
-    setActiveTool('notes')
-  }
-
-  function updateSelected(field: 'title' | 'body', value: string) {
-    setNotes((current) => current.map((note) => note.id === selectedNote ? { ...note, [field]: value, updated: 'Just now' } : note))
-  }
-
-  return (
-    <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex min-h-screen max-w-[1500px]">
-        <aside className={`fixed inset-y-0 z-20 flex w-72 flex-col border-r border-border/70 bg-background p-6 transition-[left] lg:sticky lg:left-0 lg:top-0 lg:h-screen ${mobileMenu ? 'left-0' : 'left-[-18rem]'}`}>
-          <div className="flex items-center justify-between"><Logo /><button className="rounded-full p-2 lg:hidden" onClick={() => setMobileMenu(false)} aria-label="Close menu"><X className="size-5" /></button></div>
-          <nav className="mt-14 flex flex-col gap-2" aria-label="Tools">
-            {(Object.keys(toolMeta) as ToolId[]).map((id) => { const { label, icon: Icon } = toolMeta[id]; return <button key={id} onClick={() => { setActiveTool(id); setMobileMenu(false) }} className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${activeTool === id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}><Icon className="size-4" />{label}{id === 'overview' && <span className="ml-auto text-xs opacity-60">⌘ 1</span>}</button> })}
-          </nav>
-          <div className="mt-auto rounded-3xl bg-accent p-5"><p className="font-serif text-lg leading-tight">Make room for what matters.</p><p className="mt-2 text-xs leading-5 text-muted-foreground">Four simple tools to help you check in, focus, move, and remember.</p></div>
-          <p className="mt-6 text-xs text-muted-foreground">Fair · Free forever</p>
-        </aside>
-
-        <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border/60 bg-background/90 px-5 py-4 backdrop-blur-md sm:px-8 lg:px-12"><button className="rounded-full p-2 lg:hidden" onClick={() => setMobileMenu(true)} aria-label="Open menu"><Menu className="size-5" /></button><div className="lg:hidden"><Logo /></div><div className="hidden text-sm text-muted-foreground lg:block">Tuesday, August 10</div><div className="flex items-center gap-2"><button onClick={addNote} className="flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90"><Plus className="size-3.5" /> New note</button><button className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Settings"><Settings2 className="size-4" /></button></div></header>
-
-          <div className="px-5 pb-12 pt-8 sm:px-8 sm:pt-12 lg:px-12">
-            <div className="mb-10 max-w-2xl"><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary"><span className="size-1.5 rounded-full bg-primary" />Your calm command center</p><h1 className="font-serif text-4xl leading-[1.05] tracking-tight text-balance sm:text-6xl">A little more clarity,<br /><em className="text-primary">one tool at a time.</em></h1><p className="mt-5 max-w-lg text-sm leading-6 text-muted-foreground sm:text-base">Fair brings your everyday essentials into one quiet, thoughtful space. No accounts. No noise. Just useful.</p></div>
-
-            {activeTool === 'overview' && <div className="grid gap-5 lg:grid-cols-2">
-              <ToolCard id="bmi" title="BMI check" description="A quick snapshot of your body mass index." icon={HeartPulse} onOpen={setActiveTool}><div className="flex items-end justify-between gap-4"><div><p className="font-serif text-5xl tracking-tight">{bmi ?? '—'}</p><p className="mt-2 text-xs text-muted-foreground">{bmiLabel}</p></div><button onClick={() => setActiveTool('bmi')} className="flex items-center gap-1 text-xs font-semibold text-primary">Check yours <ChevronRight className="size-3" /></button></div></ToolCard>
-              <ToolCard id="focus" title="Focus timer" description="A gentle 25-minute container for deep work." icon={AlarmClock} onOpen={setActiveTool}><div className="flex items-center justify-between gap-4"><div><p className="font-serif text-5xl tracking-tight tabular-nums">{formatTime(focusSeconds)}</p><p className="mt-2 text-xs text-muted-foreground">{focusRunning ? 'In progress' : 'Ready to focus'}</p></div><button onClick={() => setFocusRunning(!focusRunning)} className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:scale-105" aria-label={focusRunning ? 'Pause timer' : 'Start timer'}>{focusRunning ? <Pause className="size-4" /> : <Play className="ml-0.5 size-4" />}</button></div></ToolCard>
-              <ToolCard id="stopwatch" title="Stopwatch" description="Keep track of a moment, a lap, or a little progress." icon={CircleStop} onOpen={setActiveTool}><div className="flex items-center justify-between gap-4"><div><p className="font-serif text-5xl tracking-tight tabular-nums">{formatTime(stopwatch)}</p><p className="mt-2 text-xs text-muted-foreground">{stopwatchRunning ? 'Counting up' : 'Standing by'}</p></div><button onClick={() => setStopwatchRunning(!stopwatchRunning)} className="flex size-12 items-center justify-center rounded-full border border-border bg-secondary text-foreground transition hover:bg-accent" aria-label={stopwatchRunning ? 'Pause stopwatch' : 'Start stopwatch'}>{stopwatchRunning ? <Pause className="size-4" /> : <Play className="ml-0.5 size-4" />}</button></div></ToolCard>
-              <ToolCard id="notes" title="Notes" description="A soft landing place for thoughts and reminders." icon={FileText} onOpen={setActiveTool}><div className="flex items-center justify-between"><div><p className="font-serif text-5xl tracking-tight">{notes.length}</p><p className="mt-2 text-xs text-muted-foreground">Notes kept close</p></div><button onClick={() => setActiveTool('notes')} className="flex items-center gap-1 text-xs font-semibold text-primary">View notes <ChevronRight className="size-3" /></button></div></ToolCard>
-            </div>}
-
-            {activeTool === 'bmi' && <div className="max-w-2xl rounded-[1.75rem] border border-border/70 bg-card p-5 shadow-sm sm:p-8"><div className="mb-8 flex items-start justify-between"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Health snapshot</p><h2 className="font-serif text-3xl tracking-tight">BMI calculator</h2><p className="mt-2 text-sm text-muted-foreground">Enter your details for a general estimate. This is not medical advice.</p></div><button onClick={() => setActiveTool('overview')} className="rounded-full p-2 hover:bg-secondary" aria-label="Close BMI calculator"><X className="size-4" /></button></div><div className="grid gap-4 sm:grid-cols-2"><label className="flex flex-col gap-2 text-sm font-medium">Height <span className="flex items-center gap-2 rounded-xl border border-input bg-background px-3"><input className="min-w-0 flex-1 bg-transparent py-3 outline-none" value={height} onChange={(e) => setHeight(e.target.value)} type="number" min="1" /><span className="text-xs text-muted-foreground">cm</span></span></label><label className="flex flex-col gap-2 text-sm font-medium">Weight <span className="flex items-center gap-2 rounded-xl border border-input bg-background px-3"><input className="min-w-0 flex-1 bg-transparent py-3 outline-none" value={weight} onChange={(e) => setWeight(e.target.value)} type="number" min="1" /><span className="text-xs text-muted-foreground">kg</span></span></label></div><button onClick={calculateBmi} className="mt-5 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Calculate BMI</button>{bmi !== null && <div className="mt-8 rounded-2xl bg-accent p-5"><p className="text-xs font-medium text-muted-foreground">Your result</p><p className="mt-1 font-serif text-5xl">{bmi}</p><p className="mt-2 text-sm text-muted-foreground">{bmiLabel}</p></div>}</div>}
-
-            {activeTool === 'focus' && <div className="max-w-2xl rounded-[1.75rem] border border-border/70 bg-card p-5 shadow-sm sm:p-8"><div className="flex items-start justify-between"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Deep work</p><h2 className="font-serif text-3xl tracking-tight">Focus timer</h2></div><button onClick={() => setActiveTool('overview')} className="rounded-full p-2 hover:bg-secondary" aria-label="Close focus timer"><X className="size-4" /></button></div><div className="py-16 text-center"><p className="font-serif text-8xl tracking-tighter tabular-nums">{formatTime(focusSeconds)}</p><p className="mt-3 text-sm text-muted-foreground">{focusRunning ? 'Stay with it. You are doing well.' : 'Twenty-five minutes, just for you.'}</p><div className="mt-8 flex justify-center gap-3"><button onClick={() => setFocusRunning(!focusRunning)} className="flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground">{focusRunning ? <Pause className="size-4" /> : <Play className="size-4" />}{focusRunning ? 'Pause' : 'Start focus'}</button><button onClick={() => { setFocusRunning(false); setFocusSeconds(25 * 60) }} className="flex items-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-semibold"><RotateCcw className="size-4" /> Reset</button></div></div></div>}
-
-            {activeTool === 'stopwatch' && <div className="max-w-2xl rounded-[1.75rem] border border-border/70 bg-card p-5 shadow-sm sm:p-8"><div className="flex items-start justify-between"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Count it up</p><h2 className="font-serif text-3xl tracking-tight">Stopwatch</h2></div><button onClick={() => setActiveTool('overview')} className="rounded-full p-2 hover:bg-secondary" aria-label="Close stopwatch"><X className="size-4" /></button></div><div className="py-16 text-center"><p className="font-serif text-8xl tracking-tighter tabular-nums">{formatTime(stopwatch)}</p><p className="mt-3 text-sm text-muted-foreground">{stopwatchRunning ? 'Counting every second.' : 'Ready when you are.'}</p><div className="mt-8 flex justify-center gap-3"><button onClick={() => setStopwatchRunning(!stopwatchRunning)} className="flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground">{stopwatchRunning ? <Pause className="size-4" /> : <Play className="size-4" />}{stopwatchRunning ? 'Pause' : 'Start'}</button><button onClick={() => { setStopwatchRunning(false); setStopwatch(0) }} className="flex items-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-semibold"><RotateCcw className="size-4" /> Reset</button></div></div></div>}
-
-            {activeTool === 'notes' && <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"><div className="rounded-[1.75rem] border border-border/70 bg-card p-4"><div className="mb-4 flex items-center justify-between px-2"><div><p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Your thoughts</p><h2 className="font-serif text-2xl">Notes</h2></div><button onClick={addNote} className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground" aria-label="Add note"><Plus className="size-4" /></button></div><div className="flex flex-col gap-2">{notes.map((note) => <button key={note.id} onClick={() => setSelectedNote(note.id)} className={`rounded-2xl p-4 text-left transition ${selectedNote === note.id ? 'bg-accent' : 'hover:bg-secondary'}`}><div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-semibold">{note.title || 'Untitled note'}</p><span className="shrink-0 text-[11px] text-muted-foreground">{note.updated}</span></div><p className="mt-1 truncate text-xs text-muted-foreground">{note.body || 'Start writing...'}</p></button>)}</div></div><div className="min-h-[380px] rounded-[1.75rem] border border-border/70 bg-card p-5 sm:p-8">{selected ? <div className="flex h-full flex-col"><div className="flex items-start justify-between gap-4"><input value={selected.title} onChange={(e) => updateSelected('title', e.target.value)} className="min-w-0 flex-1 bg-transparent font-serif text-3xl tracking-tight outline-none" aria-label="Note title" /><button onClick={() => { setNotes((current) => current.filter((note) => note.id !== selected.id)); setSelectedNote(null) }} className="rounded-full p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Delete note"><Trash2 className="size-4" /></button></div><textarea value={selected.body} onChange={(e) => updateSelected('body', e.target.value)} placeholder="Let the thought out..." className="mt-6 min-h-64 flex-1 resize-none bg-transparent text-sm leading-7 outline-none" aria-label="Note body" /><div className="flex items-center gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground"><Check className="size-3.5 text-primary" /> Saved privately on this device</div></div> : <div className="flex h-full flex-col items-center justify-center text-center"><div className="flex size-12 items-center justify-center rounded-2xl bg-secondary"><FileText className="size-5 text-primary" /></div><p className="mt-4 font-serif text-xl">Choose a note to begin</p><p className="mt-2 text-sm text-muted-foreground">Or create a fresh thought with the plus button.</p></div>}</div></div>}
-          </div>
-        </div>
-      </div>
-    </main>
-  )
+  const [active, setActive] = useState<ToolId>('overview'); const [menu, setMenu] = useState(false)
+  const [unit, setUnit] = useState<'metric' | 'imperial'>('metric'); const [height, setHeight] = useState('170'); const [weight, setWeight] = useState('68'); const [age, setAge] = useState('30'); const [sex, setSex] = useState(''); const [bmi, setBmi] = useState<number | null>(null)
+  const [focus, setFocus] = useState(25 * 60); const [focusTotal, setFocusTotal] = useState(25 * 60); const [focusRun, setFocusRun] = useState(false); const [sessions, setSessions] = useState(0); const [custom, setCustom] = useState('')
+  const [sw, setSw] = useState(0); const [swRun, setSwRun] = useState(false); const [laps, setLaps] = useState<number[]>([])
+  const [notes, setNotes] = useState<Note[]>(starter); const [selectedId, setSelectedId] = useState<number | null>(null); const [query, setQuery] = useState(''); const editorRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => { try { const saved = localStorage.getItem('fair-notes'); if (saved) setNotes(JSON.parse(saved)) } catch {} }, [])
+  useEffect(() => { localStorage.setItem('fair-notes', JSON.stringify(notes)) }, [notes])
+  useEffect(() => { if (!focusRun) return; const id = setInterval(() => setFocus((v) => { if (v <= 1) { setFocusRun(false); setSessions((s) => s + 1); return focusTotal }; return v - 1 }), 1000); return () => clearInterval(id) }, [focusRun, focusTotal])
+  useEffect(() => { if (!swRun) return; const start = Date.now() - sw; const id = setInterval(() => setSw(Date.now() - start), 10); return () => clearInterval(id) }, [swRun])
+  const selected = notes.find((n) => n.id === selectedId); const filtered = notes.filter((n) => `${n.title} ${n.body}`.toLowerCase().includes(query.toLowerCase())).sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)))
+  const bmiLabel = bmi === null ? 'Enter your details' : bmi < 18.5 ? 'Underweight range' : bmi < 25 ? 'Healthy range' : bmi < 30 ? 'Overweight range' : 'Obesity range'
+  const healthy = unit === 'metric' ? `${(18.5 * (Number(height) / 100) ** 2).toFixed(1)}–${(24.9 * (Number(height) / 100) ** 2).toFixed(1)} kg` : `${(18.5 * (Number(height) / 39.37) ** 2 * 2.205).toFixed(1)}–${(24.9 * (Number(height) / 39.37) ** 2 * 2.205).toFixed(1)} lb`
+  function calculate() { const h = unit === 'metric' ? Number(height) / 100 : Number(height) * 0.0254; const w = unit === 'metric' ? Number(weight) : Number(weight) * 0.453592; const result = w / (h * h); setBmi(Number.isFinite(result) && result > 0 ? Number(result.toFixed(1)) : null) }
+  function newNote() { const note = { id: Date.now(), title: 'Untitled note', body: '', updated: 'Just now' }; setNotes((n) => [note, ...n]); setSelectedId(note.id); setActive('notes'); setTimeout(() => editorRef.current?.focus(), 50) }
+  function update(field: 'title' | 'body', value: string) { setNotes((all) => all.map((n) => n.id === selectedId ? { ...n, [field]: value, updated: 'Just now' } : n)) }
+  const go = (id: ToolId) => { setActive(id); setMenu(false) }
+  return <main className="min-h-screen overflow-x-hidden bg-background text-foreground"><div className="mx-auto flex min-h-screen max-w-[1440px]">
+    <aside className={`fixed inset-y-0 left-0 z-30 flex w-72 flex-col border-r border-border bg-background p-5 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}><div className="flex items-center justify-between"><Logo /><IconButton label="Close menu" onClick={() => setMenu(false)}><X /></IconButton></div><nav className="mt-10 flex flex-col gap-1" aria-label="Tools">{tools.map(({ id, label, icon: Icon }) => <button type="button" key={id} onClick={() => go(id)} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${active === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}><Icon className="size-4" />{label}</button>)}</nav><div className="mt-auto border-t border-border pt-4 text-xs text-muted-foreground"><p>Fair · Free forever</p><p className="mt-1">Private by default. Notes stay on this device.</p></div></aside>
+    {menu && <button aria-label="Close navigation" className="fixed inset-0 z-20 bg-foreground/20 lg:hidden" onClick={() => setMenu(false)} />}
+    <div className="min-w-0 flex-1"><header className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-3 border-b border-border bg-background/95 px-4 backdrop-blur sm:px-6 lg:px-10"><div className="flex items-center gap-3"><IconButton label="Open menu" onClick={() => setMenu(true)}><Menu /></IconButton><div className="lg:hidden"><Logo /></div><p className="hidden text-sm text-muted-foreground lg:block">Tuesday, August 10</p></div><div className="flex items-center gap-2"><button type="button" onClick={newNote} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"><Plus className="size-3.5" /> <span className="hidden xs:inline">New note</span></button><IconButton label="Settings"><Settings2 /></IconButton></div></header>
+      <div className="px-4 pb-12 pt-7 sm:px-6 sm:pt-10 lg:px-10"><div className="mb-8 max-w-2xl"><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground"><Activity className="size-3.5" /> Your command center</p><h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-5xl">Small tools for <span className="text-muted-foreground">clearer days.</span></h1><p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Useful utilities with no accounts, no noise, and no paid features.</p></div>
+      <div className="mb-6 flex max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1" role="tablist">{tools.map(({ id, label }) => <button type="button" key={id} role="tab" aria-selected={active === id} onClick={() => go(id)} className={`shrink-0 rounded-md px-3 py-2 text-xs font-medium ${active === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>{label}</button>)}</div>
+      {active === 'overview' && <div className="grid min-w-0 gap-4 md:grid-cols-2"><Card title="BMI check" description="A more useful body mass index estimate." icon={HeartPulse} open={() => go('bmi')}><div className="flex items-end justify-between gap-3"><div><p className="text-4xl font-semibold tabular-nums">{bmi ?? '—'}</p><p className="mt-1 text-xs text-muted-foreground">{bmiLabel}</p></div><button type="button" onClick={() => go('bmi')} className="text-xs font-medium underline underline-offset-4">Calculate</button></div></Card><Card title="Focus timer" description="Presets, custom sessions, and progress." icon={AlarmClock} open={() => go('focus')}><div className="flex items-center justify-between gap-3"><div><p className="text-4xl font-semibold tabular-nums">{clock(focus * 1000)}</p><p className="mt-1 text-xs text-muted-foreground">{sessions} sessions completed</p></div><IconButton label={focusRun ? 'Pause timer' : 'Start timer'} onClick={() => setFocusRun(!focusRun)}>{focusRun ? <Pause /> : <Play />}</IconButton></div></Card><Card title="Stopwatch" description="Centiseconds and lap history." icon={CircleStop} open={() => go('stopwatch')}><div className="flex items-center justify-between gap-3"><div><p className="text-4xl font-semibold tabular-nums">{clock(sw, true)}</p><p className="mt-1 text-xs text-muted-foreground">{laps.length} laps recorded</p></div><IconButton label={swRun ? 'Pause stopwatch' : 'Start stopwatch'} onClick={() => setSwRun(!swRun)}>{swRun ? <Pause /> : <Play />}</IconButton></div></Card><Card title="Notes" description="Search, pin, and edit notes locally." icon={FileText} open={() => go('notes')}><div className="flex items-center justify-between gap-3"><div><p className="text-4xl font-semibold">{notes.length}</p><p className="mt-1 text-xs text-muted-foreground">private notes</p></div><button type="button" onClick={newNote} className="text-xs font-medium underline underline-offset-4">New note</button></div></Card></div>}
+      {active === 'bmi' && <ToolPanel title="BMI calculator" eyebrow="Health snapshot" close={() => go('overview')}><div className="mb-5 flex flex-wrap gap-2">{(['metric', 'imperial'] as const).map((u) => <button type="button" key={u} onClick={() => setUnit(u)} className={`rounded-md border px-3 py-2 text-xs font-medium ${unit === u ? 'bg-primary text-primary-foreground' : 'bg-background'}`}>{u === 'metric' ? 'Metric · cm / kg' : 'Imperial · in / lb'}</button>)}</div><div className="grid gap-4 sm:grid-cols-2"><Field label={`Height (${unit === 'metric' ? 'cm' : 'in'})`} value={height} set={setHeight} /><Field label={`Weight (${unit === 'metric' ? 'kg' : 'lb'})`} value={weight} set={setWeight} /><Field label="Age" value={age} set={setAge} /><label className="flex flex-col gap-2 text-sm font-medium">Sex <select value={sex} onChange={(e) => setSex(e.target.value)} className="h-11 rounded-md border border-input bg-background px-3 text-sm"><option value="">Prefer not to say</option><option>Female</option><option>Male</option><option>Other</option></select></label></div><div className="mt-5 flex flex-wrap gap-2"><button type="button" onClick={calculate} className="rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Calculate BMI</button><button type="button" onClick={() => { setBmi(null); setHeight(unit === 'metric' ? '170' : '67'); setWeight(unit === 'metric' ? '68' : '150') }} className="inline-flex items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium"><RotateCcw className="size-4" /> Reset</button></div>{bmi !== null && <div className="mt-6 rounded-lg border border-border bg-secondary p-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs text-muted-foreground">Estimated BMI</p><p className="mt-1 text-5xl font-semibold">{bmi}</p><p className="mt-1 text-sm">{bmiLabel}</p></div><div className="text-right text-xs text-muted-foreground"><p>Healthy weight estimate</p><p className="mt-1 font-medium text-foreground">{healthy}</p><p className="mt-1">Age {age || '—'} · {sex || 'Not specified'}</p></div></div><div className="mt-5 grid grid-cols-4 gap-1 text-[10px] text-muted-foreground"><div className="h-2 rounded-l bg-foreground/30" /><div className="h-2 bg-foreground/50" /><div className="h-2 bg-foreground/70" /><div className="h-2 rounded-r bg-foreground" /></div><div className="mt-2 flex justify-between text-[10px] text-muted-foreground"><span>Under</span><span>Healthy</span><span>Over</span><span>Obesity</span></div></div>}<p className="mt-5 text-xs leading-5 text-muted-foreground">BMI is a screening measure, not a diagnosis. Muscle mass, age, pregnancy, and health history can affect interpretation.</p></ToolPanel>}
+      {active === 'focus' && <ToolPanel title="Focus timer" eyebrow="Deep work" close={() => go('overview')}><div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="text-6xl font-semibold tracking-tight tabular-nums sm:text-8xl">{clock(focus * 1000)}</p><p className="mt-2 text-sm text-muted-foreground">{focusRun ? 'Stay with it.' : 'Ready when you are.'}</p><div className="mt-5 h-2 overflow-hidden rounded-full bg-secondary"><div className="h-full bg-primary transition-all" style={{ width: `${Math.max(0, (focus / focusTotal) * 100)}%` }} /></div></div><div className="flex flex-wrap gap-2 sm:max-w-40"><button type="button" onClick={() => setFocusRun(!focusRun)} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">{focusRun ? <Pause /> : <Play />}{focusRun ? 'Pause' : 'Start'}</button><button type="button" onClick={() => { setFocusRun(false); setFocus(focusTotal) }} className="inline-flex items-center gap-2 rounded-md border px-4 py-2.5 text-sm"><RotateCcw /> Reset</button></div></div><div className="mt-8 flex flex-wrap items-center gap-2 border-t border-border pt-5"><span className="text-xs font-medium">Preset:</span>{[15, 25, 50].map((m) => <button type="button" key={m} onClick={() => { setFocusTotal(m * 60); setFocus(m * 60); setFocusRun(false) }} className="rounded-md border px-3 py-2 text-xs">{m} min</button>)}<label className="flex items-center gap-2 text-xs">Custom <input value={custom} onChange={(e) => setCustom(e.target.value)} onBlur={() => { const m = Number(custom); if (m > 0) { setFocusTotal(m * 60); setFocus(m * 60); setFocusRun(false) } }} className="h-9 w-16 rounded-md border bg-background px-2" type="number" min="1" max="180" /></label><span className="ml-auto text-xs text-muted-foreground">{sessions} completed</span></div></ToolPanel>}
+      {active === 'stopwatch' && <ToolPanel title="Stopwatch" eyebrow="Count it up" close={() => go('overview')}><div className="text-center"><p className="text-6xl font-semibold tracking-tight tabular-nums sm:text-8xl">{clock(sw, true)}</p><p className="mt-2 text-sm text-muted-foreground">{swRun ? 'Counting every centisecond.' : 'Ready when you are.'}</p><div className="mt-6 flex flex-wrap justify-center gap-2"><button type="button" onClick={() => setSwRun(!swRun)} className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">{swRun ? <Pause /> : <Play />}{swRun ? 'Pause' : 'Start'}</button><button type="button" onClick={() => setLaps((l) => [sw, ...l])} disabled={!sw} className="rounded-md border px-5 py-2.5 text-sm disabled:opacity-40">Lap</button><button type="button" onClick={() => { setSwRun(false); setSw(0); setLaps([]) }} className="inline-flex items-center gap-2 rounded-md border px-4 py-2.5 text-sm"><RotateCcw /> Reset</button></div></div>{laps.length > 0 && <div className="mt-8 border-t border-border pt-4"><div className="flex items-center justify-between"><p className="text-sm font-medium">Lap history</p><p className="text-xs text-muted-foreground">Best {clock(Math.min(...laps), true)}</p></div><div className="mt-3 grid max-h-48 gap-2 overflow-y-auto">{laps.map((lap, i) => <div key={`${lap}-${i}`} className="flex justify-between rounded-md bg-secondary px-3 py-2 text-sm"><span>Lap {laps.length - i}</span><span className="font-mono">{clock(lap, true)}</span></div>)}</div></div>}</ToolPanel>}
+      {active === 'notes' && <div className="grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]"><section className="min-w-0 rounded-xl border border-border bg-card p-3"><div className="flex items-center justify-between gap-2 px-1 pb-3"><div><p className="text-xs font-medium text-muted-foreground">Private workspace</p><h2 className="font-semibold">Notes</h2></div><IconButton label="New note" onClick={newNote}><Plus /></IconButton></div><label className="mb-3 flex items-center gap-2 rounded-md border border-input px-3"><Search className="size-4 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes" className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none" aria-label="Search notes" /></label><div className="grid gap-1">{filtered.map((note) => <button type="button" key={note.id} onClick={() => setSelectedId(note.id)} className={`min-w-0 rounded-lg p-3 text-left ${selectedId === note.id ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'}`}><div className="flex items-center gap-2"><p className="min-w-0 flex-1 truncate text-sm font-medium">{note.pinned ? '★ ' : ''}{note.title || 'Untitled note'}</p><span className={`shrink-0 text-[10px] ${selectedId === note.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{note.updated}</span></div><p className={`mt-1 truncate text-xs ${selectedId === note.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{note.body || 'Start writing...'}</p></button>)}</div></section><section className="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-6">{selected ? <div className="flex min-h-[380px] flex-col"><div className="flex items-start gap-2"><input value={selected.title} onChange={(e) => update('title', e.target.value)} className="min-w-0 flex-1 bg-transparent text-xl font-semibold outline-none" aria-label="Note title" /><IconButton label="Delete note" onClick={() => { setNotes((n) => n.filter((x) => x.id !== selected.id)); setSelectedId(null) }}><Trash2 /></IconButton></div><textarea ref={editorRef} value={selected.body} onChange={(e) => update('body', e.target.value)} placeholder="Start writing..." className="mt-5 min-h-64 flex-1 resize-none bg-transparent text-sm leading-6 outline-none" aria-label="Note body" /><div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1"><Check className="size-3.5" /> Saved on this device</span><span>{selected.body.length} characters</span></div></div> : <div className="flex min-h-[380px] flex-col items-center justify-center text-center"><FileText className="size-8 text-muted-foreground" /><p className="mt-3 font-medium">Select a note to edit</p><button type="button" onClick={newNote} className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Create a note</button></div>}</section></div>}
+      </div></div></div></main>
 }
+function Field({ label, value, set }: { label: string; value: string; set: (value: string) => void }) { return <label className="flex flex-col gap-2 text-sm font-medium">{label}<input value={value} onChange={(e) => set(e.target.value)} className="h-11 rounded-md border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" type="number" min="0" /></label> }
+function ToolPanel({ title, eyebrow, close, children }: { title: string; eyebrow: string; close: () => void; children: React.ReactNode }) { return <section className="min-w-0 max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6"><div className="mb-7 flex items-start justify-between gap-3"><div><p className="mb-1 text-xs font-medium uppercase tracking-[.16em] text-muted-foreground">{eyebrow}</p><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h2></div><IconButton label={`Close ${title}`} onClick={close}><X /></IconButton></div>{children}</section> }
